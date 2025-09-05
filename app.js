@@ -1,299 +1,468 @@
-// A simple function to replicate the logic of date-fns format.
-function formatDate(date, formatStr) {
-    const d = new Date(date);
-    const year = d.getFullYear();
-    const month = d.getMonth() + 1;
-    const day = d.getDate();
-    const hour = d.getHours();
-    const minute = d.getMinutes();
-    const second = d.getSeconds();
-    
-    let result = formatStr
-        .replace('yyyy', year)
-        .replace('MM', month.toString().padStart(2, '0'))
-        .replace('dd', day.toString().padStart(2, '0'))
-        .replace('HH', hour.toString().padStart(2, '0'))
-        .replace('mm', minute.toString().padStart(2, '0'))
-        .replace('ss', second.toString().padStart(2, '0'))
-        .replace('MMM', d.toLocaleString('default', { month: 'short' }))
-        .replace('d', day);
+// ---------------------------
+// Firebase init
+// ---------------------------
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import {
+  getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import {
+  getFirestore, collection, doc, getDoc, getDocs, setDoc, addDoc,
+  updateDoc, deleteDoc, query, where, orderBy, limit, serverTimestamp
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
-    return result;
-}
-
-// A simple function to create an SVG icon
-function createIcon(dPath) {
-    return `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="${dPath}"></path></svg>`;
-}
-
-// Mock Database
-const mockDb = {
-    licenses: [
-        { id: 'l1', license_number: 'GA123456789', full_name: 'John Doe', status: 'active', license_class: 'B', issue_date: '2023-01-01', expiry_date: '2028-01-01', issuing_office: 'Libreville' },
-        { id: 'l2', license_number: 'GA987654321', full_name: 'Jane Smith', status: 'expired', license_class: 'A', issue_date: '2015-05-10', expiry_date: '2020-05-10', issuing_office: 'Port-Gentil' },
-        { id: 'l3', license_number: 'GA112233445', full_name: 'Peter Jones', status: 'active', license_class: 'C', issue_date: '2024-03-15', expiry_date: '2029-03-15', issuing_office: 'Franceville' },
-        { id: 'l4', license_number: 'GA556677889', full_name: 'Mary White', status: 'suspended', license_class: 'D', issue_date: '2022-09-20', expiry_date: '2027-09-20', issuing_office: 'Oyem' },
-        { id: 'l5', license_number: 'GA135792468', full_name: 'David Green', status: 'active', license_class: 'E', issue_date: '2021-11-05', expiry_date: '2026-11-05', issuing_office: 'Moanda' },
-    ],
-    verificationRequests: [
-        { id: 'v1', license_number: 'GA123456789', requesting_entity: 'Customs Agency', requesting_country: 'France', verification_result: 'verified', created_date: new Date('2025-09-05T10:00:00').toISOString() },
-        { id: 'v2', license_number: 'GA987654321', requesting_entity: 'Border Control', requesting_country: 'Germany', verification_result: 'expired', created_date: new Date('2025-09-04T15:30:00').toISOString() },
-        { id: 'v3', license_number: 'GA556677889', requesting_entity: 'Local Police', requesting_country: 'Gabon', verification_result: 'invalid', created_date: new Date('2025-09-03T09:12:00').toISOString() },
-        { id: 'v4', license_number: 'GA111111111', requesting_entity: 'Interpol', requesting_country: 'USA', verification_result: 'not_found', created_date: new Date('2025-09-05T11:45:00').toISOString() },
-    ]
+// 1) Replace these with your project values
+const firebaseConfig = {
+  apiKey: "YOUR_API_KEY",
+  authDomain: "YOUR_PROJECT.firebaseapp.com",
+  projectId: "YOUR_PROJECT_ID",
+  storageBucket: "YOUR_PROJECT.appspot.com",
+  messagingSenderId: "SENDER_ID",
+  appId: "APP_ID"
 };
 
-// Mock API layer
-const API = {
-    License: {
-        async list() { return mockDb.licenses; },
-        async filter({ license_number }) {
-            return mockDb.licenses.filter(l => l.license_number === license_number);
-        }
-    },
-    VerificationRequest: {
-        async list() { return mockDb.verificationRequests; },
-        async create(data) {
-            const newId = 'v' + (mockDb.verificationRequests.length + 1);
-            const newRequest = { id: newId, ...data, created_date: new Date().toISOString() };
-            mockDb.verificationRequests.unshift(newRequest);
-            return newRequest;
-        }
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+
+// Collections
+const colLicenses = collection(db, "licenses");
+const colVerifs = collection(db, "verifications");
+const colUsers = collection(db, "users");
+const colSettings = collection(db, "settings");
+
+// ---------------------------
+// Minimal router
+// ---------------------------
+const views = document.querySelectorAll(".view");
+const menuItems = document.querySelectorAll(".menu li");
+const titleEl = document.getElementById("viewTitle");
+
+menuItems.forEach(li=>{
+  li.addEventListener("click", ()=>{
+    menuItems.forEach(x=>x.classList.remove("active"));
+    li.classList.add("active");
+    showView(li.dataset.view);
+  });
+});
+
+function showView(name){
+  titleEl.textContent = ({
+    dashboard:"System Dashboard",
+    analytics:"Analytics Dashboard",
+    licenses:"License Management",
+    verification:"International Verification Portal",
+    users:"User Management",
+    settings:"System Settings"
+  })[name] || "GDLVS";
+
+  views.forEach(v=>v.classList.remove("visible"));
+  document.getElementById("view-"+name).classList.add("visible");
+  // lazy load per view
+  if(name==="dashboard") loadDashboard();
+  if(name==="analytics") loadAnalytics();
+  if(name==="licenses") loadLicenses();
+  if(name==="verification") initPortal();
+  if(name==="users") loadUsers();
+  if(name==="settings") loadSettings();
+}
+showView("dashboard");
+
+// ---------------------------
+// Auth (email/password prototype)
+// Admin role is stored in /users/{uid}.role = 'admin' | 'verifier'
+// ---------------------------
+const authStatus = document.getElementById("authStatus");
+const btnSignIn = document.getElementById("btnSignIn");
+const btnSignOut = document.getElementById("btnSignOut");
+
+btnSignIn.addEventListener("click", async ()=>{
+  const email = prompt("Email:");
+  const password = prompt("Password:");
+  if(!email||!password) return;
+  try{
+    await signInWithEmailAndPassword(auth, email, password);
+  }catch(e){ alert("Sign-in failed: "+e.message); }
+});
+
+btnSignOut.addEventListener("click", ()=>signOut(auth));
+
+let currentUserRole = "guest";
+
+onAuthStateChanged(auth, async (user)=>{
+  if(user){
+    authStatus.textContent = user.email;
+    btnSignIn.classList.add("hidden");
+    btnSignOut.classList.remove("hidden");
+    // read role
+    const udoc = await getDoc(doc(colUsers, user.uid));
+    currentUserRole = udoc.exists() ? (udoc.data().role || "verifier") : "verifier";
+  }else{
+    authStatus.textContent = "Not signed in";
+    btnSignIn.classList.remove("hidden");
+    btnSignOut.classList.add("hidden");
+    currentUserRole = "guest";
+  }
+  applyRoleVisibility();
+});
+
+function applyRoleVisibility(){
+  const adminEls = document.querySelectorAll(".admin-only");
+  adminEls.forEach(el=>{
+    el.style.display = (currentUserRole==="admin") ? "" : "none";
+  });
+}
+
+// ---------------------------
+// Dashboard
+// ---------------------------
+async function loadDashboard(){
+  // Stats
+  const licSnap = await getDocs(colLicenses);
+  const total = licSnap.size;
+  let active=0;
+  licSnap.forEach(d=>{ if((d.data().status||"") === "Active") active++; });
+
+  // Today’s verifications
+  const todayStart = new Date(); todayStart.setHours(0,0,0,0);
+  const todaySnap = await getDocs(query(colVerifs, orderBy("timestamp","desc"), limit(50)));
+  let todayCount=0, ok=0, totalRecent=0;
+  todaySnap.forEach(d=>{
+    const ts = d.data().timestamp?.toDate?.() || new Date(0);
+    if(ts>=todayStart) todayCount++;
+    totalRecent++;
+    if(d.data().status==="Verified") ok++;
+  });
+
+  document.getElementById("statTotalLicenses").textContent = total;
+  document.getElementById("statActive").textContent = active;
+  document.getElementById("statToday").textContent = todayCount;
+  document.getElementById("statSuccess").textContent = totalRecent ? Math.round(100*ok/totalRecent)+"%" : "—";
+
+  // Recent verifications table
+  const tbody = document.querySelector("#tblRecentVerifications tbody");
+  tbody.innerHTML = "";
+  todaySnap.forEach(d=>{
+    const v = d.data();
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${v.licenseNumber}</td>
+      <td>${v.requestingOrg || "-"}</td>
+      <td>${v.country || "-"}</td>
+      <td><span class="pill ${v.status==='Verified'?'active':'expired'}">${v.status}</span></td>
+      <td>${v.timestamp?.toDate?.().toLocaleString() || "-"}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  // Alerts (simple: show licenses expiring in <30 days)
+  const alerts = document.getElementById("systemAlerts");
+  alerts.innerHTML = "";
+  const soon = [];
+  licSnap.forEach(d=>{
+    const {expiryDate, fullName} = d.data();
+    if(expiryDate){
+      const diff = (new Date(expiryDate) - new Date())/86400000;
+      if(diff>0 && diff<30) soon.push({id:d.id, fullName, days:Math.ceil(diff)});
     }
-};
+  });
+  if(!soon.length) {
+    alerts.innerHTML = `<li class="muted">No alerts.</li>`;
+  } else {
+    soon.sort((a,b)=>a.days-b.days).slice(0,5).forEach(a=>{
+      const li = document.createElement("li");
+      li.textContent = `License ${a.id} (${a.fullName}) expires in ${a.days} day(s).`;
+      alerts.appendChild(li);
+    });
+  }
 
-// The application state and rendering logic
-function App() {
-    const rootElement = document.getElementById('root');
-    let activePage = 'dashboard';
-    const state = {
-        licenses: [],
-        verifications: [],
-        isLoading: true,
-        searchData: {
-            license_number: '',
-            requesting_entity: '',
-            requesting_country: '',
-            contact_email: '',
-            purpose: ''
-        },
-        verificationResult: null,
-        isSearching: false,
-        error: null
+  // Quick actions
+  document.getElementById("qaAddLicense").onclick = ()=>openLicenseModal();
+  document.getElementById("qaOpenPortal").onclick = ()=>{ 
+    document.querySelector('[data-view="verification"]').click();
+  };
+
+  // Fake health metrics
+  document.getElementById("metricDbLatency").textContent = (20+Math.round(Math.random()*20));
+}
+
+// ---------------------------
+// Analytics
+// ---------------------------
+let chartStatus, chartClasses, chartVerifications;
+async function loadAnalytics(){
+  const licSnap = await getDocs(colLicenses);
+  const statusCounts = {Active:0,Expired:0,Suspended:0};
+  const classCounts = {A:0,B:0,C:0,D:0,E:0};
+
+  licSnap.forEach(d=>{
+    const v=d.data();
+    statusCounts[v.status] = (statusCounts[v.status]||0)+1;
+    classCounts[v.class] = (classCounts[v.class]||0)+1;
+  });
+
+  const verSnap = await getDocs(query(colVerifs, orderBy("timestamp","desc"), limit(200)));
+  let verified=0, notFound=0, expired=0;
+  verSnap.forEach(d=>{
+    const s=d.data().status;
+    if(s==="Verified") verified++;
+    else if(s==="Not Found") notFound++;
+    else if(s==="Expired") expired++;
+  });
+
+  // destroy previous
+  [chartStatus,chartClasses,chartVerifications].forEach(c=>c?.destroy?.());
+
+  chartStatus = new Chart(document.getElementById("chartStatus"), {
+    type:"doughnut",
+    data:{labels:Object.keys(statusCounts),datasets:[{data:Object.values(statusCounts)}]},
+    options:{responsive:true}
+  });
+  chartClasses = new Chart(document.getElementById("chartClasses"), {
+    type:"bar",
+    data:{labels:Object.keys(classCounts),datasets:[{data:Object.values(classCounts)}]},
+    options:{responsive:true}
+  });
+  chartVerifications = new Chart(document.getElementById("chartVerifications"), {
+    type:"bar",
+    data:{labels:["Verified","Not Found","Expired"],datasets:[{data:[verified,notFound,expired]}]},
+    options:{responsive:true}
+  });
+}
+
+// ---------------------------
+// License Management (CRUD)
+// ---------------------------
+const tblLicensesBody = document.querySelector("#tblLicenses tbody");
+const searchLicense = document.getElementById("searchLicense");
+const filterStatus = document.getElementById("filterStatus");
+const filterClass = document.getElementById("filterClass");
+document.getElementById("btnAddLicense").onclick = ()=>openLicenseModal();
+
+searchLicense.oninput = loadLicenses;
+filterStatus.onchange = loadLicenses;
+filterClass.onchange = loadLicenses;
+
+async function loadLicenses(){
+  const snap = await getDocs(query(colLicenses, orderBy("issueDate","desc")));
+  tblLicensesBody.innerHTML="";
+  snap.forEach(d=>{
+    const v=d.data();
+    // filters
+    const q = (searchLicense.value||"").toLowerCase();
+    if(q && !(`${d.id} ${v.fullName}`.toLowerCase().includes(q))) return;
+    if(filterStatus.value && v.status!==filterStatus.value) return;
+    if(filterClass.value && v.class!==filterClass.value) return;
+
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${d.id}</td>
+      <td>${v.fullName}</td>
+      <td>${v.class}</td>
+      <td><span class="pill ${v.status==='Active'?'active':(v.status==='Expired'?'expired':'suspended')}">${v.status}</span></td>
+      <td>${v.issueDate||"-"}</td>
+      <td>${v.expiryDate||"-"}</td>
+      <td>
+        <button class="btn ghost" data-edit="${d.id}">Edit</button>
+        <button class="btn danger" data-del="${d.id}">Delete</button>
+      </td>
+    `;
+    tblLicensesBody.appendChild(tr);
+  });
+
+  tblLicensesBody.querySelectorAll("[data-edit]").forEach(b=>{
+    b.onclick = ()=>openLicenseModal(b.dataset.edit);
+  });
+  tblLicensesBody.querySelectorAll("[data-del]").forEach(b=>{
+    b.onclick = async ()=>{
+      if(currentUserRole!=="admin") return alert("Admins only.");
+      if(confirm("Delete this license?")){
+        await deleteDoc(doc(colLicenses, b.dataset.del));
+        loadLicenses();
+      }
     };
-
-    function setState(newState) {
-        Object.assign(state, newState);
-        render();
-    }
-
-    function render() {
-        if (activePage === 'dashboard') {
-            Dashboard();
-        } else if (activePage === 'verificationPortal') {
-            VerificationPortal();
-        } else if (activePage === 'licenseManagement') {
-            LicenseManagement();
-        }
-    }
-
-    async function loadData() {
-        setState({ isLoading: true });
-        try {
-            const [licensesData, verificationsData] = await Promise.all([
-                API.License.list(),
-                API.VerificationRequest.list()
-            ]);
-            setState({
-                licenses: licensesData,
-                verifications: verificationsData,
-                isLoading: false
-            });
-        } catch (e) {
-            console.error(e);
-            setState({ isLoading: false });
-        }
-    }
-
-    // --- Dashboard Component ---
-    function Dashboard() {
-        const activeLicenses = state.licenses.filter(l => l.status === 'active').length;
-        const expiredLicenses = state.licenses.filter(l => l.status === 'expired').length;
-        const todayVerifications = state.verifications.filter(v => formatDate(v.created_date, 'yyyy-MM-dd') === formatDate(new Date(), 'yyyy-MM-dd')).length;
-        const successfulVerifications = state.verifications.filter(v => v.verification_result === 'verified').length;
-        const successRate = state.verifications.length > 0 ? ((successfulVerifications / state.verifications.length) * 100).toFixed(1) : 0;
-
-        rootElement.innerHTML = `
-            <div class="max-w-7xl mx-auto p-6 space-y-8">
-                <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                    <div>
-                        <h1 class="text-3xl font-bold text-slate-900">System Dashboard</h1>
-                        <p class="text-slate-600 mt-1">Gabon Driver's License Verification System</p>
-                    </div>
-                </div>
-
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                    ${StatsCard('Total Licenses', state.licenses.length.toLocaleString(), createIcon('M18 5V3a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h2'), 'from-blue-500 to-blue-600', '+12 this week', 'up')}
-                    ${StatsCard('Active Licenses', activeLicenses.toLocaleString(), createIcon('M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z'), 'from-green-500 to-green-600', `${activeLicenses} active`, 'stable')}
-                    ${StatsCard('Today\'s Verifications', todayVerifications.toLocaleString(), createIcon('M21 15V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-1c0-1.55-1.1-2.85-2.5-3.16M15 15l-4-4L9 13l-2-2'), 'from-purple-500 to-purple-600', '+8 from yesterday', 'up')}
-                    ${StatsCard('Success Rate', `${successRate}%`, createIcon('m22 7-8.25 8.25-5.5-5.5L2 18'), 'from-orange-500 to-orange-600', '98.5% average', 'up')}
-                </div>
-
-                <div class="grid lg:grid-cols-3 gap-6">
-                    <div class="lg:col-span-2 space-y-6">
-                        ${RecentVerifications(state.verifications)}
-
-                        <div class="card shadow-lg">
-                            <div class="card-header">
-                                <h3 class="card-title text-xl">Quick Actions</h3>
-                            </div>
-                            <div class="card-content">
-                                <div class="grid md:grid-cols-2 gap-4">
-                                    <div class="p-4 bg-gradient-to-r from-blue-50 to-blue-100 rounded-xl border border-blue-200">
-                                        <div class="flex items-center gap-3 mb-2">
-                                            ${createIcon('M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2')}<span class="font-semibold text-blue-900">License Management</span>
-                                        </div>
-                                        <p class="text-sm text-blue-700">Add, edit, or manage driver's licenses</p>
-                                    </div>
-                                    <div class="p-4 bg-gradient-to-r from-purple-50 to-purple-100 rounded-xl border border-purple-200">
-                                        <div class="flex items-center gap-3 mb-2">
-                                            ${createIcon('M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm0 18a8 8 0 1 1 8-8 8 8 0 0 1-8 8zm4-12.7L8.7 16l-.7-.7L15.3 4z')}<span class="font-semibold text-purple-900">International Portal</span>
-                                        </div>
-                                        <p class="text-sm text-purple-700">Access verification portal for authorities</p>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="space-y-6">
-                        ${SystemHealth(state.licenses.length, activeLicenses, expiredLicenses, state.verifications)}
-                    </div>
-                </div>
-            </div>
-        `;
-    }
-
-    function StatsCard(title, value, icon, bgColor, change, trend) {
-        const getTrendIcon = (trend) => {
-            switch(trend) {
-                case 'up': return createIcon('M12 5l-7 7 7 7 7-7-7-7z'); // Simplified up arrow
-                default: return '';
-            }
-        };
-        const getTrendColor = (trend) => {
-            switch(trend) {
-                case 'up': return 'text-green-600';
-                default: return 'text-slate-500';
-            }
-        };
-
-        return `
-            <div class="card shadow-lg p-6">
-                <div class="flex justify-between items-start mb-4">
-                    <div class="p-3 rounded-xl bg-gradient-to-br ${bgColor} bg-opacity-20">${icon}</div>
-                    ${getTrendIcon(trend)}
-                </div>
-                <div>
-                    <h3 class="text-sm font-medium text-slate-600 mb-1">${title}</h3>
-                    <p class="text-3xl font-bold text-slate-900 mb-2">${value}</p>
-                    ${change ? `<p class="text-sm font-medium ${getTrendColor(trend)}">${change}</p>` : ''}
-                </div>
-            </div>
-        `;
-    }
-
-    function RecentVerifications(verifications) {
-        const recentVerifications = verifications.slice(0, 5);
-        const getStatusIcon = (result) => {
-            switch(result) {
-                case 'verified': return createIcon('M9 12.75L11.25 15L15 9.75M12 21.75c-4.97 0-9-4.03-9-9s4.03-9 9-9 9 4.03 9 9-4.03 9-9 9z');
-                case 'not_found': return createIcon('M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm0 18a8 8 0 1 1 8-8 8 8 0 0 1-8 8zm3.5-12.5L12 12.5 8.5 9 12 5.5 15.5 9z');
-                case 'expired': return createIcon('M10.29 3.86a2 2 0 0 1 3.42 0L21 16.5a2 2 0 0 1-1.72 3.0H4.72a2 2 0 0 1-1.72-3.0z');
-                default: return createIcon('M12 8v4l3 3m6-4a9 9 0 1 0-9 9 9 9 0 0 0 9-9z');
-            }
-        };
-        const getStatusBadge = (result) => {
-            const styles = {
-                verified: "badge-verified",
-                not_found: "badge-not-found",
-                expired: "badge-expired",
-                invalid: "badge-not-found"
-            };
-            return `<span class="badge badge-outline ${styles[result]}">${getStatusIcon(result)}<span class="ml-1 capitalize">${result.replace('_', ' ')}</span></span>`;
-        };
-
-        return `
-            <div class="card shadow-lg">
-                <div class="card-header">
-                    <h3 class="card-title text-xl">Recent Verification Requests</h3>
-                </div>
-                <div class="card-content">
-                    <div class="overflow-x-auto">
-                        <table class="w-full">
-                            <thead>
-                                <tr class="border-b border-slate-200">
-                                    <th class="text-left font-semibold text-slate-700 py-2">License Number</th>
-                                    <th class="text-left font-semibold text-slate-700 py-2">Requesting Entity</th>
-                                    <th class="text-left font-semibold text-slate-700 py-2">Status</th>
-                                    <th class="text-left font-semibold text-slate-700 py-2">Date</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                ${recentVerifications.map(v => `
-                                    <tr class="hover:bg-slate-50 transition-colors">
-                                        <td class="py-2 text-sm">${v.license_number}</td>
-                                        <td class="py-2 text-sm">${v.requesting_entity}</td>
-                                        <td class="py-2 text-sm">${getStatusBadge(v.verification_result)}</td>
-                                        <td class="py-2 text-sm text-slate-600">${formatDate(v.created_date, 'MMM d, HH:mm')}</td>
-                                    </tr>
-                                `).join('')}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-        `;
-    }
-
-    function SystemHealth(totalLicenses, activeLicenses, expiredLicenses, verifications) {
-        const activePercentage = totalLicenses > 0 ? (activeLicenses / totalLicenses) * 100 : 0;
-        const successfulVerifications = verifications.filter(v => v.verification_result === 'verified').length;
-        const successRate = verifications.length > 0 ? (successfulVerifications / verifications.length) * 100 : 100;
-
-        return `
-            <div class="card shadow-lg">
-                <div class="card-header">
-                    <h3 class="card-title text-xl">System Health</h3>
-                </div>
-                <div class="card-content space-y-6">
-                    <div class="space-y-3">
-                        <div class="flex items-center justify-between">
-                            <div class="flex items-center gap-2">
-                                ${createIcon('M2 3a1 1 0 0 1 1-1h18a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1z')}
-                                <span class="text-sm font-medium text-slate-700">Active Licenses</span>
-                            </div>
-                            <span class="text-sm font-semibold text-slate-900">${activePercentage.toFixed(1)}%</span>
-                        </div>
-                        <div class="progress"><div class="progress-bar bg-blue-500" style="width: ${activePercentage}%;"></div></div>
-                    </div>
-                    <div class="space-y-3">
-                        <div class="flex items-center justify-between">
-                            <div class="flex items-center gap-2">
-                                ${createIcon('M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z')}
-                                <span class="text-sm font-medium text-slate-700">Verification Success</span>
-                            </div>
-                            <span class="text-sm font-semibold text-slate-900">${successRate.toFixed(1)}%</span>
-                        </div>
-                        <div class="progress"><div class="progress-bar bg-green-500" style="width: ${successRate}%;"></div></div>
-                    </div>
-                </div>
-            </div>
-        `;
-    }
-
-    // Main function call to start the app
-    loadData().then(() => Dashboard());
+  });
 }
 
-document.addEventListener('DOMContentLoaded', App);
+function openLicenseModal(id){
+  if(currentUserRole!=="admin") return alert("Admins only.");
+  const dlg = document.getElementById("modal");
+  const title = document.getElementById("modalTitle");
+  const body = document.getElementById("modalBody");
+  const ok = document.getElementById("modalOk");
+  title.textContent = id ? "Edit License" : "Add License";
+  body.innerHTML = `
+    <label>License Number<input id="mLic" class="input" ${id?"disabled":""}></label>
+    <label>Full Name<input id="mName" class="input"></label>
+    <label>Class
+      <select id="mClass" class="input"><option>A</option><option>B</option><option>C</option><option>D</option><option>E</option></select>
+    </label>
+    <label>Status
+      <select id="mStatus" class="input"><option>Active</option><option>Expired</option><option>Suspended</option></select>
+    </label>
+    <label>Issue Date<input id="mIssue" type="date" class="input"></label>
+    <label>Expiry Date<input id="mExpiry" type="date" class="input"></label>
+  `;
+  dlg.showModal();
+
+  if(id){
+    getDoc(doc(colLicenses,id)).then(s=>{
+      const v=s.data();
+      document.getElementById("mLic").value = id;
+      document.getElementById("mName").value = v.fullName||"";
+      document.getElementById("mClass").value = v.class||"B";
+      document.getElementById("mStatus").value = v.status||"Active";
+      document.getElementById("mIssue").value = v.issueDate||"";
+      document.getElementById("mExpiry").value = v.expiryDate||"";
+    });
+  }
+
+  ok.onclick = async (e)=>{
+    e.preventDefault();
+    const payload = {
+      fullName: document.getElementById("mName").value.trim(),
+      class: document.getElementById("mClass").value,
+      status: document.getElementById("mStatus").value,
+      issueDate: document.getElementById("mIssue").value,
+      expiryDate: document.getElementById("mExpiry").value
+    };
+    if(!payload.fullName) return alert("Full name is required.");
+    if(id){
+      await updateDoc(doc(colLicenses,id), payload);
+    }else{
+      const licNo = document.getElementById("mLic").value.trim();
+      if(!licNo) return alert("License number is required.");
+      await setDoc(doc(colLicenses, licNo), payload);
+    }
+    dlg.close(); loadLicenses(); loadAnalytics(); loadDashboard();
+  };
+  document.getElementById("modalCancel").onclick = ()=>dlg.close();
+}
+
+// ---------------------------
+// Verification Portal
+// ---------------------------
+function initPortal(){
+  const form = document.getElementById("formVerify");
+  const out = document.getElementById("verifyResult");
+  form.onsubmit = async (e)=>{
+    e.preventDefault();
+    const licenseNumber = document.getElementById("vLicenseNumber").value.trim();
+    const requestingOrg = document.getElementById("vRequestingOrg").value.trim();
+    const country = document.getElementById("vCountry").value.trim();
+    const contactEmail = document.getElementById("vContactEmail").value.trim();
+    const purpose = document.getElementById("vPurpose").value;
+
+    out.textContent = "Verifying…";
+    const ref = doc(colLicenses, licenseNumber);
+    const snap = await getDoc(ref);
+
+    let status = "Not Found";
+    let detail = "This license was not found in the registry.";
+    if(snap.exists()){
+      const v = snap.data();
+      const expired = v.expiryDate && (new Date(v.expiryDate) < new Date());
+      if(expired) { status="Expired"; detail=`Expired on ${v.expiryDate}.`; }
+      else if(v.status!=="Active") { status=v.status; detail=`Status: ${v.status}.`; }
+      else { status="Verified"; detail=`License holder: ${v.fullName} • Class ${v.class} • Expiry ${v.expiryDate}`; }
+    }
+
+    await addDoc(colVerifs, {
+      licenseNumber, requestingOrg, country, contactEmail, purpose, status,
+      timestamp: serverTimestamp()
+    });
+
+    out.innerHTML = status==="Verified"
+      ? `<p>✅ <strong>Verified.</strong> ${detail}</p>`
+      : (status==="Expired"
+          ? `<p>🟠 <strong>Expired.</strong> ${detail}</p>`
+          : `<p>❌ <strong>Not Found.</strong> ${detail}</p>`);
+
+    loadDashboard(); loadAnalytics();
+  };
+}
+
+// ---------------------------
+// User Management (admin)
+// ---------------------------
+async function loadUsers(){
+  if(currentUserRole!=="admin"){ document.querySelector("#tblUsers tbody").innerHTML="<tr><td colspan='3'>Admins only.</td></tr>"; return;}
+  const snap = await getDocs(colUsers);
+  const tbody = document.querySelector("#tblUsers tbody");
+  tbody.innerHTML="";
+  snap.forEach(d=>{
+    const u=d.data();
+    const tr=document.createElement("tr");
+    tr.innerHTML = `
+      <td>${u.email}</td>
+      <td>${u.role||"verifier"}</td>
+      <td>
+        <button class="btn ghost" data-role="verifier" data-id="${d.id}">Make Verifier</button>
+        <button class="btn ghost" data-role="admin" data-id="${d.id}">Make Admin</button>
+        <button class="btn danger" data-remove="${d.id}">Remove</button>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+  tbody.querySelectorAll("[data-role]").forEach(b=>{
+    b.onclick = async ()=>{
+      await updateDoc(doc(colUsers,b.dataset.id), {role:b.dataset.role});
+      loadUsers();
+    };
+  });
+  tbody.querySelectorAll("[data-remove]").forEach(b=>{
+    b.onclick = async ()=>{
+      await deleteDoc(doc(colUsers,b.dataset.remove));
+      loadUsers();
+    };
+  });
+
+  document.getElementById("btnInviteUser").onclick = async ()=>{
+    const email = prompt("Invitee email:");
+    const role = (prompt("Role (admin/verifier):","verifier")||"verifier").toLowerCase();
+    // In a real system you’d send an invite. For prototype: create a placeholder user doc.
+    const fakeUid = crypto.randomUUID();
+    await setDoc(doc(colUsers,fakeUid), {email, role});
+    loadUsers();
+  };
+}
+
+// ---------------------------
+// Settings (prototype)
+// ---------------------------
+async function loadSettings(){
+  const docRef = doc(colSettings, "main");
+  const snap = await getDoc(docRef);
+  const setAllowedDomains = document.getElementById("setAllowedDomains");
+  const setAlertDays = document.getElementById("setAlertDays");
+  if(snap.exists()){
+    const s = snap.data();
+    setAllowedDomains.value = s.allowedDomains || "";
+    setAlertDays.value = s.alertDays || 30;
+  }
+  document.getElementById("btnSaveSettings").onclick = async ()=>{
+    await setDoc(docRef, {
+      allowedDomains: setAllowedDomains.value.trim(),
+      alertDays: Number(setAlertDays.value||30)
+    }, {merge:true});
+    alert("Settings saved.");
+  };
+}
+
+// ---------------------------
+// (Optional) Seed sample data once
+// ---------------------------
+// Run from console: window.seed()
+window.seed = async function(){
+  const samples = [
+    ["GAB21543211","Jean Baptiste Moussavou","B","Active","2018-04-20","2028-04-20"],
+    ["GAB87435217","Marie-Claire Nzebi","A","Active","2019-12-08","2029-12-08"],
+    ["GAB98531121","Paul Obame","C","Suspended","2020-03-10","2030-03-10"],
+    ["GAB61234590","Ousso Ndombele","D","Expired","2015-01-14","2025-01-14"],
+    ["GAB78123321","Daniel Koumba Biyoghe","B","Active","2021-04-12","2031-09-19"]
+  ];
+  for (const [id,name,cls,status,issue,exp] of samples){
+    await setDoc(doc(colLicenses,id), {fullName:name,class:cls,status,issueDate:issue,expiryDate:exp});
+  }
+  alert("Seeded sample licenses.");
+  loadDashboard(); loadLicenses(); loadAnalytics();
+};
