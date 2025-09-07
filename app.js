@@ -12,12 +12,14 @@ import {
 
 // 1) Replace these with your project values
 const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_PROJECT.firebaseapp.com",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_PROJECT.appspot.com",
-  messagingSenderId: "SENDER_ID",
-  appId: "APP_ID"
+    apiKey: "AIzaSyBi72AiS2JvqCzfCUorrRRoPGqfnKLl16o",
+  authDomain: "test-capstone-37cfd.firebaseapp.com",
+  projectId: "test-capstone-37cfd",
+  storageBucket: "test-capstone-37cfd.firebasestorage.app",
+  messagingSenderId: "514218901602",
+  appId: "1:514218901602:web:e811660fa835347966913b",
+  measurementId: "G-56523ELVV5"
+};
 };
 
 const app = initializeApp(firebaseConfig);
