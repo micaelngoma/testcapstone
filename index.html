@@ -8,8 +8,15 @@
   <!-- Link stylesheet -->
   <link rel="stylesheet" href="style.css">
 
-  <!-- Chart.js for analytics -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- Manifest for PWA support -->
+  <link rel="manifest" href="manifest.json">
+
+  <!-- Register service worker for offline support -->
+  <script>
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("sw.js");
+    }
+  </script>
 </head>
 <body>
   <!-- Top navigation bar -->
@@ -23,11 +30,11 @@
     </div>
   </nav>
 
-  <!-- Main content grid -->
+  <!-- Main content -->
   <main class="grid">
-    <!-- Verification Portal -->
+    <!-- Left: Verification form -->
     <section class="card">
-      <h2>Verification Portal</h2>
+      <h2>Verify a License</h2>
       <form id="verifyForm">
         <label>License No.
           <input id="vLicense" required>
@@ -43,40 +50,24 @@
       <div id="verifyOutput"></div>
     </section>
 
-    <!-- Admin Console -->
+    <!-- Right: Admin console (only visible to signed-in admins) -->
     <section class="card hidden" id="adminConsole">
-      <h2>System Management</h2>
+      <h2>Admin Console</h2>
 
-      <!-- Dashboard -->
+      <!-- Add License -->
       <div class="subcard">
-        <h3>Dashboard</h3>
-        <ul>
-          <li>Total Licenses: <span id="dashLicenses">0</span></li>
-          <li>Total Verifications: <span id="dashVerifications">0</span></li>
-          <li>Total Users Invited: <span id="dashUsers">0</span></li>
-        </ul>
-      </div>
-
-      <!-- Analytics -->
-      <div class="subcard">
-        <h3>Analytics</h3>
-        <canvas id="analyticsChart" width="400" height="200"></canvas>
-      </div>
-
-      <!-- License Management -->
-      <div class="subcard">
-        <h3>License Management</h3>
+        <h3>Add License</h3>
         <form id="addLicenseForm">
           <input id="aLicenseNo" placeholder="License No" required>
           <input id="aOrg" placeholder="Organization" required>
           <input id="aEmail" type="email" placeholder="Contact Email" required>
-          <button class="btn primary">Add License</button>
+          <button class="btn primary">Add</button>
         </form>
       </div>
 
-      <!-- User Management -->
+      <!-- Invite User -->
       <div class="subcard">
-        <h3>User Management</h3>
+        <h3>Invite User</h3>
         <form id="inviteForm">
           <input id="iEmail" type="email" placeholder="User Email" required>
           <select id="iRole">
@@ -85,6 +76,23 @@
           </select>
           <button class="btn primary">Send Invite</button>
         </form>
+      </div>
+
+      <!-- User Management Table -->
+      <div class="subcard">
+        <h3>User Management</h3>
+        <table id="userTable">
+          <thead>
+            <tr>
+              <th>Email</th>
+              <th>Role</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="userTableBody">
+            <!-- Users will load here dynamically -->
+          </tbody>
+        </table>
       </div>
 
       <!-- System Settings -->
@@ -97,21 +105,13 @@
           <button class="btn">Save</button>
         </form>
       </div>
-
-      <!-- System Status -->
-      <div class="subcard">
-        <h3>System Status</h3>
-        <p>✅ <strong>System Online</strong></p>
-        <p>🌍 <strong>International Access: Active</strong></p>
-        <p>🔐 <strong>Security Notice:</strong> All verification requests are encrypted and logged for compliance.</p>
-      </div>
     </section>
   </main>
 
-  <!-- Toast notifications -->
+  <!-- Toast container for notifications -->
   <div id="toastContainer"></div>
 
-  <!-- App logic -->
+  <!-- App JS -->
   <script src="app.js" type="module"></script>
 </body>
 </html>
