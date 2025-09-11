@@ -1,220 +1,100 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>GDLVS — Gabon Driver’s License Verification System</title>
-  <link rel="stylesheet" href="style.css" />
-  <!-- Chart.js for analytics -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-  <!-- Firebase SDKs (modular) -->
-  <script type="module">
-    // Preload so app.js sees them from cache; do nothing here.
-    import "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-    import "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-    import "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+  <meta charset="UTF-8">
+  <title>GDLVS – Gabonese Digital License Verification System</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <!-- Link stylesheet -->
+  <link rel="stylesheet" href="style.css">
+
+  <!-- Manifest for PWA support -->
+  <link rel="manifest" href="manifest.json">
+
+  <!-- Register service worker for offline support -->
+  <script>
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("sw.js");
+    }
   </script>
-  <script type="module" src="app.js" defer></script>
 </head>
 <body>
-  <aside class="sidebar">
-    <div class="brand">GDLVS</div>
-    <ul class="menu">
-      <li data-view="dashboard" class="active"><span>Dashboard</span></li>
-      <li data-view="analytics"><span>Analytics</span></li>
-      <li data-view="licenses"><span>License Management</span></li>
-      <li data-view="verification"><span>Verification Portal</span></li>
-      <li data-view="users" class="admin-only"><span>User Management</span></li>
-      <li data-view="settings" class="admin-only"><span>System Settings</span></li>
-    </ul>
-    <div class="system">
-      <div><small>System Status</small></div>
-      <div id="systemOnline" class="badge success">Online</div>
-    </div>
-  </aside>
-
-  <header class="topbar">
-    <div class="left">
-      <h1 id="viewTitle">System Dashboard</h1>
-    </div>
-    <div class="right">
+  <!-- Top navigation bar -->
+  <nav class="navbar">
+    <h1>GDLVS Portal</h1>
+    <div class="nav-actions">
       <span id="authStatus" class="muted">Not signed in</span>
+      <button id="btnDarkMode" class="btn ghost">🌙</button>
       <button id="btnSignIn" class="btn">Sign in</button>
       <button id="btnSignOut" class="btn outline hidden">Sign out</button>
     </div>
-  </header>
+  </nav>
 
-  <main id="app">
-
-    <!-- DASHBOARD -->
-    <section id="view-dashboard" class="view visible">
-      <div class="grid grid-4">
-        <div class="card stat">
-          <div class="stat-value" id="statTotalLicenses">—</div>
-          <div class="stat-label">Total Licenses</div>
-        </div>
-        <div class="card stat">
-          <div class="stat-value" id="statActive">—</div>
-          <div class="stat-label">Active Licenses</div>
-        </div>
-        <div class="card stat">
-          <div class="stat-value" id="statToday">—</div>
-          <div class="stat-label">Today’s Verifications</div>
-        </div>
-        <div class="card stat">
-          <div class="stat-value" id="statSuccess">—</div>
-          <div class="stat-label">Success Rate</div>
-        </div>
-      </div>
-
-      <div class="grid grid-2">
-        <div class="card">
-          <h3>Recent Verification Requests</h3>
-          <table class="table" id="tblRecentVerifications">
-            <thead><tr><th>License</th><th>Requester</th><th>Country</th><th>Status</th><th>Time</th></tr></thead>
-            <tbody></tbody>
-          </table>
-        </div>
-        <div class="card">
-          <h3>System Alerts</h3>
-          <ul id="systemAlerts" class="list">
-            <!-- populated dynamically -->
-          </ul>
-        </div>
-      </div>
-
-      <div class="grid grid-2">
-        <div class="card">
-          <h3>Quick Actions</h3>
-          <div class="row gap">
-            <button id="qaAddLicense" class="btn">Add License</button>
-            <button id="qaOpenPortal" class="btn outline">Open Verification Portal</button>
-          </div>
-        </div>
-        <div class="card">
-          <h3>System Health</h3>
-          <p class="muted">DB latency: <span id="metricDbLatency">—</span> ms • Uptime: <span id="metricUptime">99.99%</span></p>
-        </div>
-      </div>
+  <!-- Main content -->
+  <main class="grid">
+    <!-- Left: Verification form -->
+    <section class="card">
+      <h2>Verify a License</h2>
+      <form id="verifyForm">
+        <label>License No.
+          <input id="vLicense" required>
+        </label>
+        <label>Organization
+          <input id="vOrg" required>
+        </label>
+        <label>Contact Email
+          <input id="vContactEmail" type="email" required>
+        </label>
+        <button type="submit" class="btn primary">Verify</button>
+      </form>
+      <div id="verifyOutput"></div>
     </section>
 
-    <!-- ANALYTICS -->
-    <section id="view-analytics" class="view">
-      <div class="grid grid-2">
-        <div class="card">
-          <h3>License Status Distribution</h3>
-          <canvas id="chartStatus"></canvas>
-        </div>
-        <div class="card">
-          <h3>License Classes</h3>
-          <canvas id="chartClasses"></canvas>
-        </div>
-      </div>
-      <div class="grid grid-1">
-        <div class="card">
-          <h3>Verification Results</h3>
-          <canvas id="chartVerifications"></canvas>
-        </div>
-      </div>
-    </section>
+    <!-- Right: Admin console (only visible to signed-in admins) -->
+    <section class="card hidden" id="adminConsole">
+      <h2>Admin Console</h2>
 
-    <!-- LICENSE MANAGEMENT -->
-    <section id="view-licenses" class="view">
-      <div class="card">
-        <div class="row space">
-          <h3>License Management</h3>
-          <button id="btnAddLicense" class="btn">Add New License</button>
-        </div>
-        <div class="row gap">
-          <input id="searchLicense" class="input" placeholder="Search by number or name…" />
-          <select id="filterStatus" class="input">
-            <option value="">All Status</option>
-            <option>Active</option>
-            <option>Expired</option>
-            <option>Suspended</option>
-          </select>
-          <select id="filterClass" class="input">
-            <option value="">All Classes</option>
-            <option>A</option><option>B</option><option>C</option><option>D</option><option>E</option>
-          </select>
-        </div>
-        <table class="table" id="tblLicenses">
-          <thead>
-          <tr>
-            <th>License #</th><th>Full Name</th><th>Class</th><th>Status</th>
-            <th>Issue</th><th>Expiry</th><th>Actions</th>
-          </tr>
-          </thead>
-          <tbody></tbody>
-        </table>
-      </div>
-    </section>
-
-    <!-- VERIFICATION PORTAL -->
-    <section id="view-verification" class="view">
-      <div class="card">
-        <h3>International Verification Portal</h3>
-        <form id="formVerify" class="grid grid-2">
-          <input class="input" id="vLicenseNumber" placeholder="License Number *" required />
-          <input class="input" id="vRequestingOrg" placeholder="Requesting Organization *" required />
-          <input class="input" id="vCountry" placeholder="Country *" required />
-          <input class="input" id="vContactEmail" placeholder="Contact Email *" required type="email" />
-          <select class="input" id="vPurpose">
-            <option>License conversion for international resident</option>
-            <option>Employment verification</option>
-            <option>Background screening</option>
-          </select>
-          <div>
-            <button class="btn" type="submit">Verify License</button>
-          </div>
+      <!-- Add License -->
+      <div class="subcard">
+        <h3>Add License</h3>
+        <form id="addLicenseForm">
+          <input id="aLicenseNo" placeholder="License No" required>
+          <input id="aOrg" placeholder="Organization" required>
+          <input id="aEmail" type="email" placeholder="Contact Email" required>
+          <button class="btn primary">Add</button>
         </form>
-        <div id="verifyResult" class="mt"></div>
       </div>
-    </section>
 
-    <!-- USER MANAGEMENT (Admin only) -->
-    <section id="view-users" class="view admin-only">
-      <div class="card">
-        <div class="row space">
-          <h3>User Management</h3>
-          <button id="btnInviteUser" class="btn">Invite User</button>
-        </div>
-        <table class="table" id="tblUsers">
-          <thead><tr><th>Email</th><th>Role</th><th>Actions</th></tr></thead>
-          <tbody></tbody>
-        </table>
+      <!-- Invite User -->
+      <div class="subcard">
+        <h3>Invite User</h3>
+        <form id="inviteForm">
+          <input id="iEmail" type="email" placeholder="User Email" required>
+          <select id="iRole">
+            <option value="viewer">Viewer</option>
+            <option value="admin">Admin</option>
+          </select>
+          <button class="btn primary">Send Invite</button>
+        </form>
       </div>
-    </section>
 
-    <!-- SETTINGS (Admin only) -->
-    <section id="view-settings" class="view admin-only">
-      <div class="card">
+      <!-- System Settings -->
+      <div class="subcard">
         <h3>System Settings</h3>
-        <p class="muted">Prototype settings (branding, thresholds, allowed domains for portal, etc.).</p>
-        <div class="grid grid-2">
-          <label>Allowed Verification Domains
-            <input id="setAllowedDomains" class="input" placeholder="e.g. gov, jp, gouv.ga" />
+        <form id="settingsForm">
+          <label>System Name
+            <input id="sName" value="GDLVS">
           </label>
-          <label>Alert Threshold (Expiring in days)
-            <input id="setAlertDays" type="number" class="input" value="30" />
-          </label>
-        </div>
-        <button id="btnSaveSettings" class="btn mt">Save Settings</button>
+          <button class="btn">Save</button>
+        </form>
       </div>
     </section>
-
   </main>
 
-  <!-- MODAL (shared) -->
-  <dialog id="modal">
-    <form method="dialog" class="modal">
-      <h3 id="modalTitle">Add License</h3>
-      <div id="modalBody"></div>
-      <menu>
-        <button id="modalCancel" class="btn outline">Cancel</button>
-        <button id="modalOk" class="btn">Save</button>
-      </menu>
-    </form>
-  </dialog>
+  <!-- Toast container for notifications -->
+  <div id="toastContainer"></div>
+
+  <!-- App JS -->
+  <script src="app.js" type="module"></script>
 </body>
 </html>
