@@ -1,11 +1,17 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
   <title>GDLVS – Gabonese Digital License Verification System</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <link rel="stylesheet" href="style.css">
-  <link rel="manifest" href="manifest.json">
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <!-- Styles -->
+  <link rel="stylesheet" href="style.css" />
+
+  <!-- PWA manifest -->
+  <link rel="manifest" href="manifest.json" />
+
+  <!-- Service worker -->
   <script>
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.register("sw.js");
@@ -13,66 +19,41 @@
   </script>
 </head>
 <body>
+  <!-- ===== Top Navigation ===== -->
   <nav class="navbar">
     <h1>GDLVS Portal</h1>
     <div class="nav-actions">
-      <span id="authStatus" class="muted">Not signed in</span>
-      <button id="btnDarkMode" class="btn ghost">🌙</button>
-      <button id="btnSignIn" class="btn">Sign in</button>
-      <button id="btnSignOut" class="btn outline hidden">Sign out</button>
+      <span id="userInfo" class="muted">Not logged in</span>
+      <button id="loginBtn" class="btn">Sign In</button>
+      <button id="logoutBtn" class="btn outline hidden">Sign Out</button>
     </div>
   </nav>
+
+  <!-- ===== Main Content ===== -->
   <main class="grid">
+    <!-- License list and add form -->
     <section class="card">
-      <h2>Verify a License</h2>
-      <form id="verifyForm">
-        <label>License No.
-          <input id="vLicense" required>
-        </label>
-        <label>Organization
-          <input id="vOrg" required>
-        </label>
-        <label>Contact Email
-          <input id="vContactEmail" type="email" required>
-        </label>
-        <button type="submit" class="btn primary">Verify</button>
-      </form>
-      <div id="verifyOutput"></div>
+      <h2>Licenses</h2>
+      <ul id="licensesList"></ul>
+      <button id="addLicenseBtn" class="btn primary">Add License</button>
     </section>
-    <section class="card hidden" id="adminConsole">
+
+    <!-- ===== Admin Section (visible only to admins) ===== -->
+    <section class="card hidden" id="adminSection">
       <h2>Admin Console</h2>
-      <div class="subcard">
-        <h3>Add License</h3>
-        <form id="addLicenseForm">
-          <input id="aLicenseNo" placeholder="License No" required>
-          <input id="aOrg" placeholder="Organization" required>
-          <input id="aEmail" type="email" placeholder="Contact Email" required>
-          <button class="btn primary" type="submit">Add</button>
-        </form>
-      </div>
+
+      <!-- Invite User -->
       <div class="subcard">
         <h3>Invite User</h3>
-        <form id="inviteForm">
-          <input id="iEmail" type="email" placeholder="User Email" required>
-          <select id="iRole">
-            <option value="viewer">Viewer</option>
-            <option value="admin">Admin</option>
-          </select>
-          <button class="btn primary" type="submit">Send Invite</button>
-        </form>
-      </div>
-      <div class="subcard">
-        <h3>System Settings</h3>
-        <form id="settingsForm">
-          <label>System Name
-            <input id="sName" value="GDLVS">
-          </label>
-          <button class="btn" type="submit">Save</button>
-        </form>
+        <button id="inviteUserBtn" class="btn primary">Send Invite</button>
       </div>
     </section>
   </main>
+
+  <!-- Toast container for notifications -->
   <div id="toastContainer"></div>
+
+  <!-- App logic -->
   <script src="app.js" type="module"></script>
 </body>
 </html>
