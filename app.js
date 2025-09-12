@@ -10,16 +10,7 @@ import {
   getAuth, signInWithPopup, GoogleAuthProvider, signOut
 } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js";
 
-// TODO: Replace with your Firebase project config
-const firebaseConfig = {
-// Import the functions you need from the SDKs you need
-import { initializeApp } from "firebase/app";
-import { getAnalytics } from "firebase/analytics";
-// TODO: Add SDKs for Firebase products that you want to use
-// https://firebase.google.com/docs/web/setup#available-libraries
-
-// Your web app's Firebase configuration
-// For Firebase JS SDK v7.20.0 and later, measurementId is optional
+// ✅ Firebase config (Step 9)
 const firebaseConfig = {
   apiKey: "AIzaSyBiqc5ymmQ0ZafBsbRSXLiwWGXSnl5gbJo",
   authDomain: "test-capstone-1-ffaa7.firebaseapp.com",
@@ -30,178 +21,150 @@ const firebaseConfig = {
   measurementId: "G-60B0LMR8JS"
 };
 
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
-const analytics = getAnalytics(app);
-};
-
+// ✅ Initialize Firebase services
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
 
+
 /* ==========================
    UI Elements
    ========================== */
-const btnSignIn = document.getElementById("btnSignIn");
-const btnSignOut = document.getElementById("btnSignOut");
-const btnDark = document.getElementById("btnDarkMode");
-const authStatus = document.getElementById("authStatus");
-const adminConsole = document.getElementById("adminConsole");
-const toastContainer = document.getElementById("toastContainer");
-const userTableBody = document.getElementById("userTableBody");
+const loginBtn = document.getElementById("loginBtn");
+const logoutBtn = document.getElementById("logoutBtn");
+const userInfo = document.getElementById("userInfo");
+const addLicenseBtn = document.getElementById("addLicenseBtn");
+const licensesList = document.getElementById("licensesList");
+const adminSection = document.getElementById("adminSection");
+const inviteUserBtn = document.getElementById("inviteUserBtn");
+
 
 /* ==========================
-   Toast Notification Helper
+   Auth
    ========================== */
-function toast(msg, type = "info") {
-  const div = document.createElement("div");
-  div.className = `toast ${type}`;
-  div.textContent = msg;
-  toastContainer.appendChild(div);
-  setTimeout(() => div.remove(), 4000);
-}
+const provider = new GoogleAuthProvider();
 
-/* ==========================
-   Dark Mode
-   ========================== */
-btnDark.onclick = () => {
-  document.body.classList.toggle("dark");
-  localStorage.setItem("darkMode", document.body.classList.contains("dark"));
-};
-if (localStorage.getItem("darkMode") === "true") {
-  document.body.classList.add("dark");
-}
-
-/* ==========================
-   Authentication
-   ========================== */
-btnSignIn.onclick = async () => {
-  const provider = new GoogleAuthProvider();
-  try { await signInWithPopup(auth, provider); toast("Signed in successfully","success"); }
-  catch(err){ toast(err.message,"error"); }
-};
-btnSignOut.onclick = () => signOut(auth);
-
-auth.onAuthStateChanged(user => {
-  if(user){
-    authStatus.textContent = `Signed in as ${user.email}`;
-    btnSignIn.classList.add("hidden");
-    btnSignOut.classList.remove("hidden");
-    adminConsole.classList.remove("hidden");
-    loadUsers(); // load users dynamically for admins
-  } else {
-    authStatus.textContent = "Not signed in";
-    btnSignIn.classList.remove("hidden");
-    btnSignOut.classList.add("hidden");
-    adminConsole.classList.add("hidden");
+loginBtn.addEventListener("click", async () => {
+  try {
+    const result = await signInWithPopup(auth, provider);
+    const user = result.user;
+    userInfo.textContent = `Logged in as: ${user.displayName}`;
+    loginBtn.style.display = "none";
+    logoutBtn.style.display = "inline-block";
+    await checkAdmin(user.uid);
+  } catch (error) {
+    console.error("Login failed", error);
   }
 });
 
-/* ==========================
-   Audit Logging
-   ========================== */
-const colAudit = collection(db,"auditLogs");
-async function logAudit(action, detail={}) {
-  await addDoc(colAudit,{
-    action,
-    detail,
-    user: auth.currentUser?.email || "guest",
-    ts: serverTimestamp()
-  });
-}
+logoutBtn.addEventListener("click", async () => {
+  await signOut(auth);
+  userInfo.textContent = "Not logged in";
+  loginBtn.style.display = "inline-block";
+  logoutBtn.style.display = "none";
+  adminSection.style.display = "none";
+});
+
 
 /* ==========================
-   License Verification
+   Firestore – Licenses
    ========================== */
-const verifyForm = document.getElementById("verifyForm");
-const verifyOutput = document.getElementById("verifyOutput");
-const rlCache = {}; // rate limit cache
-
-function canVerify(email){
-  const now = Date.now();
-  if(rlCache[email] && now - rlCache[email] < 60000) return false;
-  rlCache[email] = now;
-  return true;
-}
-
-verifyForm.onsubmit = async e => {
-  e.preventDefault();
-  const licNo = document.getElementById("vLicense").value.trim();
-  const org = document.getElementById("vOrg").value.trim();
-  const email = document.getElementById("vContactEmail").value.trim();
-  if(!canVerify(email)){
-    verifyOutput.innerHTML = "<p>⚠️ Too many requests. Try again later.</p>";
-    return;
-  }
-  const ref = doc(db,"licenses",licNo);
-  const snap = await getDoc(ref);
-  if(snap.exists() && snap.data().org===org){
-    verifyOutput.innerHTML = `<p>✅ License valid. Contact: ${snap.data().email}</p>`;
-  } else verifyOutput.innerHTML = "<p>❌ Invalid license.</p>";
-};
-
-/* ==========================
-   Admin: Add License
-   ========================== */
-const addLicenseForm = document.getElementById("addLicenseForm");
-addLicenseForm.onsubmit = async e => {
-  e.preventDefault();
-  const licNo = document.getElementById("aLicenseNo").value.trim();
-  const org = document.getElementById("aOrg").value.trim();
-  const email = document.getElementById("aEmail").value.trim();
-  await setDoc(doc(db,"licenses",licNo),{org,email,created:serverTimestamp()});
-  await logAudit("Add License",{license:licNo});
-  toast("License added","success");
-};
-
-/* ==========================
-   Admin: Invite User
-   ========================== */
-const inviteForm = document.getElementById("inviteForm");
-inviteForm.onsubmit = async e => {
-  e.preventDefault();
-  const email = document.getElementById("iEmail").value.trim();
-  const role = document.getElementById("iRole").value;
-  await addDoc(collection(db,"invites"),{email,role,ts:serverTimestamp()});
-  await logAudit("Invite User",{email,role});
-  toast("Invite recorded","success");
-  loadUsers(); // refresh user table
-};
-
-/* ==========================
-   Admin: User Management
-   ========================== */
-async function loadUsers(){
-  userTableBody.innerHTML="";
-  const snapshot = await getDocs(collection(db,"invites"));
-  snapshot.forEach(docSnap=>{
-    const data = docSnap.data();
-    const tr=document.createElement("tr");
-    tr.innerHTML=`
-      <td>${data.email}</td>
-      <td>${data.role}</td>
-      <td><button class="btn deleteBtn">Remove</button></td>
-    `;
-    tr.querySelector(".deleteBtn").addEventListener("click", async ()=>{
-      if(confirm(`Remove ${data.email}?`)){
-        await deleteDoc(doc(db,"invites",docSnap.id));
-        await logAudit("Remove User",{email:data.email});
-        toast(`User ${data.email} removed`,"success");
-        loadUsers();
-      }
+addLicenseBtn.addEventListener("click", async () => {
+  const licenseNumber = prompt("Enter license number:");
+  if (!licenseNumber) return;
+  try {
+    await addDoc(collection(db, "licenses"), {
+      number: licenseNumber,
+      createdAt: serverTimestamp()
     });
-    userTableBody.appendChild(tr);
+    alert("License added!");
+    loadLicenses();
+  } catch (error) {
+    console.error("Error adding license", error);
+  }
+});
+
+async function loadLicenses() {
+  licensesList.innerHTML = "";
+  const snapshot = await getDocs(collection(db, "licenses"));
+  snapshot.forEach(docSnap => {
+    const li = document.createElement("li");
+    li.textContent = docSnap.data().number;
+    licensesList.appendChild(li);
   });
 }
+loadLicenses();
+
 
 /* ==========================
-   Admin: System Settings
+   Admin Features
    ========================== */
-const settingsForm = document.getElementById("settingsForm");
-settingsForm.onsubmit = async e => {
-  e.preventDefault();
-  const name = document.getElementById("sName").value.trim();
-  await setDoc(doc(db,"settings","system"),{name});
-  await logAudit("Update Settings",{name});
-  toast("Settings saved","success");
-};
+inviteUserBtn.addEventListener("click", async () => {
+  const email = prompt("Enter email to invite:");
+  if (!email) return;
+  try {
+    await setDoc(doc(db, "invites", email), {
+      role: "user",
+      invitedAt: serverTimestamp()
+    });
+    alert("User invited!");
+  } catch (error) {
+    console.error("Error inviting user", error);
+  }
+});
+
+async function checkAdmin(uid) {
+  const inviteDoc = await getDoc(doc(db, "invites", uid));
+  if (inviteDoc.exists() && inviteDoc.data().role === "admin") {
+    adminSection.style.display = "block";
+  } else {
+    adminSection.style.display = "none";
+  }
+}
+
+
+/* ==========================
+   Logging
+   ========================== */
+async function logAction(action, user) {
+  try {
+    await addDoc(collection(db, "logs"), {
+      action,
+      user: user.email,
+      timestamp: serverTimestamp()
+    });
+  } catch (error) {
+    console.error("Error logging action", error);
+  }
+}
+
+
+/* ==========================
+   Settings (only admins)
+   ========================== */
+async function saveSetting(key, value) {
+  const user = auth.currentUser;
+  if (!user) return;
+
+  const inviteDoc = await getDoc(doc(db, "invites", user.uid));
+  if (inviteDoc.exists() && inviteDoc.data().role === "admin") {
+    await setDoc(doc(db, "settings", key), { value });
+  } else {
+    alert("Not authorized to change settings.");
+  }
+}
+
+
+/* ==========================
+   Audit Logs
+   ========================== */
+async function createAuditLog(action) {
+  const user = auth.currentUser;
+  if (!user) return;
+
+  await addDoc(collection(db, "auditLogs"), {
+    action,
+    user: user.email,
+    timestamp: serverTimestamp()
+  });
+}
