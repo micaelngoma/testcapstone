@@ -1,6 +1,3 @@
-/* ==========================
-   Firebase Setup
-   ========================== */
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
 import {
   getFirestore, collection, doc, setDoc, addDoc,
@@ -15,143 +12,124 @@ const firebaseConfig = {
   apiKey: "AIzaSyBiqc5ymmQ0ZafBsbRSXLiwWGXSnl5gbJo",
   authDomain: "test-capstone-1-ffaa7.firebaseapp.com",
   projectId: "test-capstone-1-ffaa7",
-  storageBucket: "test-capstone-1-ffaa7.firebasestorage.app",
+  storageBucket: "test-capstone-1-ffaa7.appspot.com",
   messagingSenderId: "908666517369",
   appId: "1:908666517369:web:a34e12a93e44afde6ca1a8",
   measurementId: "G-60B0LMR8JS"
 };
 
+// Initialize Firebase services
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
 
-/* ==========================
-   UI Elements
-   ========================== */
-const loginBtn = document.getElementById("loginBtn");
-const logoutBtn = document.getElementById("logoutBtn");
-const userInfo = document.getElementById("userInfo");
-const addLicenseBtn = document.getElementById("addLicenseBtn");
-const licensesList = document.getElementById("licensesList");
-const adminSection = document.getElementById("adminSection");
-const inviteUserBtn = document.getElementById("inviteUserBtn");
+// Get UI elements (IDs corrected!)
+const loginBtn = document.getElementById("btnSignIn");
+const logoutBtn = document.getElementById("btnSignOut");
+const authStatus = document.getElementById("authStatus");
+const adminConsole = document.getElementById("adminConsole");
 
-/* ==========================
-   Auth
-   ========================== */
+// Auth
 const provider = new GoogleAuthProvider();
 
 loginBtn.addEventListener("click", async () => {
   try {
     const result = await signInWithPopup(auth, provider);
     const user = result.user;
-    userInfo.textContent = `Logged in as: ${user.displayName}`;
-    loginBtn.style.display = "none";
-    logoutBtn.style.display = "inline-block";
-    await checkAdmin(user);
+    authStatus.textContent = `Logged in as: ${user.displayName}`;
+    loginBtn.classList.add("hidden");
+    logoutBtn.classList.remove("hidden");
+    await checkAdmin(user.uid);
   } catch (error) {
     console.error("Login failed", error);
-    alert("Login failed. Check console for details.");
+    authStatus.textContent = "Login failed";
   }
 });
 
 logoutBtn.addEventListener("click", async () => {
   await signOut(auth);
-  userInfo.textContent = "Not logged in";
-  loginBtn.style.display = "inline-block";
-  logoutBtn.style.display = "none";
-  adminSection.style.display = "none";
+  authStatus.textContent = "Not signed in";
+  loginBtn.classList.remove("hidden");
+  logoutBtn.classList.add("hidden");
+  adminConsole.classList.add("hidden");
 });
 
-/* ==========================
-   Firestore – Licenses
-   ========================== */
-addLicenseBtn.addEventListener("click", async () => {
-  const licenseNumber = prompt("Enter license number:");
-  if (!licenseNumber) return;
+// Show/hide admin on login
+async function checkAdmin(uid) {
+  const inviteDoc = await getDoc(doc(db, "invites", uid));
+  if (inviteDoc.exists() && inviteDoc.data().role === "admin") {
+    adminConsole.classList.remove("hidden");
+  } else {
+    adminConsole.classList.add("hidden");
+  }
+}
+
+// Verify License
+document.getElementById("verifyForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const license = document.getElementById("vLicense").value;
+  const org = document.getElementById("vOrg").value;
+  const email = document.getElementById("vContactEmail").value;
+  // Example logic: Query Firestore for license info
+  const licensesRef = collection(db, "licenses");
+  const snapshot = await getDocs(licensesRef);
+  let found = false;
+  snapshot.forEach(docSnap => {
+    if (docSnap.data().number === license) found = true;
+  });
+  document.getElementById("verifyOutput").textContent =
+    found ? "License is valid." : "License not found.";
+});
+
+// Add License (Admin)
+document.getElementById("addLicenseForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const licenseNo = document.getElementById("aLicenseNo").value;
+  const org = document.getElementById("aOrg").value;
+  const email = document.getElementById("aEmail").value;
   try {
     await addDoc(collection(db, "licenses"), {
-      number: licenseNumber,
+      number: licenseNo,
+      org,
+      email,
       createdAt: serverTimestamp()
     });
     alert("License added!");
-    loadLicenses();
   } catch (error) {
-    console.error("Error adding license", error);
+    alert("Error adding license");
+    console.error(error);
   }
 });
 
-async function loadLicenses() {
-  licensesList.innerHTML = "";
-  const snapshot = await getDocs(collection(db, "licenses"));
-  snapshot.forEach(docSnap => {
-    const li = document.createElement("li");
-    li.textContent = docSnap.data().number;
-    licensesList.appendChild(li);
-  });
-}
-loadLicenses();
-
-/* ==========================
-   Admin Features
-   ========================== */
-inviteUserBtn.addEventListener("click", async () => {
-  const email = prompt("Enter email to invite:");
-  if (!email) return;
+// Invite User (Admin)
+document.getElementById("inviteForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const email = document.getElementById("iEmail").value;
+  const role = document.getElementById("iRole").value;
   try {
     await setDoc(doc(db, "invites", email), {
-      role: "user",
+      role,
       invitedAt: serverTimestamp()
     });
     alert("User invited!");
   } catch (error) {
-    console.error("Error inviting user", error);
+    alert("Error inviting user");
+    console.error(error);
   }
 });
 
-async function checkAdmin(user) {
-  // Use email as document ID
-  const inviteDoc = await getDoc(doc(db, "invites", user.email));
-  if (inviteDoc.exists() && inviteDoc.data().role === "admin") {
-    adminSection.style.display = "block";
-  } else {
-    adminSection.style.display = "none";
-  }
-}
-
-/* ==========================
-   Logging & Settings helpers
-   ========================== */
-async function logAction(action, user) {
-  try {
-    await addDoc(collection(db, "logs"), {
-      action,
-      user: user.email,
-      timestamp: serverTimestamp()
-    });
-  } catch (error) {
-    console.error("Error logging action", error);
-  }
-}
-
-async function saveSetting(key, value) {
+// System Settings (Admin)
+document.getElementById("settingsForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const name = document.getElementById("sName").value;
   const user = auth.currentUser;
-  if (!user) return;
-
-  const inviteDoc = await getDoc(doc(db, "invites", user.email));
-  if (inviteDoc.exists() && inviteDoc.data().role === "admin") {
-    await setDoc(doc(db, "settings", key), { value });
-  } else {
-    alert("Not authorized to change settings.");
+  if (user) {
+    const inviteDoc = await getDoc(doc(db, "invites", user.uid));
+    if (inviteDoc.exists() && inviteDoc.data().role === "admin") {
+      await setDoc(doc(db, "settings", "systemName"), { value: name });
+      alert("Setting saved");
+    } else {
+      alert("Not authorized");
+    }
   }
-}
-
-async function createAuditLog(action) {
-  const user = auth.currentUser;
-  if (!user) return;
-  await addDoc(collection(db, "auditLogs"), {
-    action,
-    user: user.email,
-    timestamp: serverTimestamp()
-  });
-}
+});
