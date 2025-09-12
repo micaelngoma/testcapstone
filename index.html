@@ -4,14 +4,8 @@
   <meta charset="UTF-8">
   <title>GDLVS – Gabonese Digital License Verification System</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
-
-  <!-- Link stylesheet -->
   <link rel="stylesheet" href="style.css">
-
-  <!-- Manifest for PWA support -->
   <link rel="manifest" href="manifest.json">
-
-  <!-- Register service worker for offline support -->
   <script>
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.register("sw.js");
@@ -19,7 +13,6 @@
   </script>
 </head>
 <body>
-  <!-- Top navigation bar -->
   <nav class="navbar">
     <h1>GDLVS Portal</h1>
     <div class="nav-actions">
@@ -29,10 +22,7 @@
       <button id="btnSignOut" class="btn outline hidden">Sign out</button>
     </div>
   </nav>
-
-  <!-- Main content -->
   <main class="grid">
-    <!-- Left: Verification form -->
     <section class="card">
       <h2>Verify a License</h2>
       <form id="verifyForm">
@@ -49,23 +39,17 @@
       </form>
       <div id="verifyOutput"></div>
     </section>
-
-    <!-- Right: Admin console (only visible to signed-in admins) -->
     <section class="card hidden" id="adminConsole">
       <h2>Admin Console</h2>
-
-      <!-- Add License -->
       <div class="subcard">
         <h3>Add License</h3>
         <form id="addLicenseForm">
           <input id="aLicenseNo" placeholder="License No" required>
           <input id="aOrg" placeholder="Organization" required>
           <input id="aEmail" type="email" placeholder="Contact Email" required>
-          <button class="btn primary">Add</button>
+          <button class="btn primary" type="submit">Add</button>
         </form>
       </div>
-
-      <!-- Invite User -->
       <div class="subcard">
         <h3>Invite User</h3>
         <form id="inviteForm">
@@ -74,44 +58,21 @@
             <option value="viewer">Viewer</option>
             <option value="admin">Admin</option>
           </select>
-          <button class="btn primary">Send Invite</button>
+          <button class="btn primary" type="submit">Send Invite</button>
         </form>
       </div>
-
-      <!-- User Management Table -->
-      <div class="subcard">
-        <h3>User Management</h3>
-        <table id="userTable">
-          <thead>
-            <tr>
-              <th>Email</th>
-              <th>Role</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody id="userTableBody">
-            <!-- Users will load here dynamically -->
-          </tbody>
-        </table>
-      </div>
-
-      <!-- System Settings -->
       <div class="subcard">
         <h3>System Settings</h3>
         <form id="settingsForm">
           <label>System Name
             <input id="sName" value="GDLVS">
           </label>
-          <button class="btn">Save</button>
+          <button class="btn" type="submit">Save</button>
         </form>
       </div>
     </section>
   </main>
-
-  <!-- Toast container for notifications -->
   <div id="toastContainer"></div>
-
-  <!-- App JS -->
   <script src="app.js" type="module"></script>
 </body>
 </html>
